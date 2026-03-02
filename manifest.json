@@ -1,0 +1,40 @@
+{
+  "manifest_version": "0.3",
+  "name": "spamtitan-mcp",
+  "display_name": "SpamTitan MCP Server",
+  "version": "0.0.0",
+  "description": "MCP server for SpamTitan email security — manage quarantine, allowlists, blocklists, and view email stats",
+  "long_description": "Provides AI assistants with structured access to SpamTitan email security. Manage the email quarantine queue (release or delete messages), maintain allowlists and blocklists, and view email flow statistics through the Model Context Protocol.",
+  "author": { "name": "Wyre Technology", "url": "https://github.com/wyre-technology" },
+  "repository": { "type": "git", "url": "https://github.com/wyre-technology/spamtitan-mcp" },
+  "homepage": "https://github.com/wyre-technology/spamtitan-mcp",
+  "license": "Apache-2.0",
+  "keywords": ["spamtitan", "email", "security", "spam", "quarantine", "msp"],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.js"],
+      "env": {
+        "SPAMTITAN_API_KEY": "${user_config.spamtitan_api_key}",
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  },
+  "tools_generated": true,
+  "user_config": {
+    "spamtitan_api_key": {
+      "type": "string",
+      "title": "SpamTitan API Key",
+      "description": "Your SpamTitan API key (X-SpamTitan-API-Key)",
+      "sensitive": true,
+      "required": true
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": { "node": ">=20.0.0" },
+    "claude_desktop": ">=0.10.0"
+  }
+}
