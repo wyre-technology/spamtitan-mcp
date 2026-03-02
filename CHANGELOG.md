@@ -1,3 +1,10 @@
+# 1.0.0 (2026-03-02)
+
+
+### Features
+
+* initial SpamTitan MCP server scaffold ([569c9fd](https://github.com/wyre-technology/spamtitan-mcp/commit/569c9fd5a9af6a530c8980e1c6a36fc68762263e))
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
