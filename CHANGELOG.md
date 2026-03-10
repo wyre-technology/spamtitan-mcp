@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/wyre-technology/spamtitan-mcp/compare/v1.0.0...v1.1.0) (2026-03-10)
+
+
+### Features
+
+* **elicitation:** add MCP elicitation support with graceful fallback ([7823cb1](https://github.com/wyre-technology/spamtitan-mcp/commit/7823cb1a9f9abe71fb42860be3870661a07928d1))
+
 # 1.0.0 (2026-03-02)
 
 
