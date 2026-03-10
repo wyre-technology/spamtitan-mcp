@@ -11,6 +11,7 @@ import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import type { DomainHandler, CallToolResult } from "../utils/types.js";
 import { apiRequest } from "../utils/client.js";
 import { logger } from "../utils/logger.js";
+import { elicitText } from "../utils/elicitation.js";
 
 function getTools(): Tool[] {
   return [
@@ -89,12 +90,28 @@ async function handleCall(
     case "spamtitan_get_queue": {
       const page = (args.page as number) || 1;
       const perPage = (args.per_page as number) || 50;
+      let sender = args.sender as string | undefined;
+      let recipient = args.recipient as string | undefined;
+      const subject = args.subject as string | undefined;
+      const reason = args.reason as string | undefined;
+
+      // If no filters provided, ask the user if they want to narrow by recipient
+      if (!sender && !recipient && !subject && !reason) {
+        const recipientFilter = await elicitText(
+          "The quarantine queue can be large. Would you like to filter by recipient email address? Leave blank to list all.",
+          "recipient",
+          "Enter a recipient email address to filter by, or leave blank for all"
+        );
+        if (recipientFilter) {
+          recipient = recipientFilter;
+        }
+      }
 
       logger.info("API call: quarantine.getQueue", {
         page,
         perPage,
-        sender: args.sender,
-        recipient: args.recipient,
+        sender,
+        recipient,
       });
 
       const params: Record<string, string | number | boolean | undefined> = {
@@ -102,10 +119,10 @@ async function handleCall(
         per_page: perPage,
       };
 
-      if (args.sender) params.sender = args.sender as string;
-      if (args.recipient) params.recipient = args.recipient as string;
-      if (args.subject) params.subject = args.subject as string;
-      if (args.reason) params.reason = args.reason as string;
+      if (sender) params.sender = sender;
+      if (recipient) params.recipient = recipient;
+      if (subject) params.subject = subject;
+      if (reason) params.reason = reason;
 
       const result = await apiRequest<unknown>("/api/v1/quarantine/queue", { params });
 

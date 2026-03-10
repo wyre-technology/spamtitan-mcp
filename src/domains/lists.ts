@@ -10,6 +10,7 @@ import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import type { DomainHandler, CallToolResult } from "../utils/types.js";
 import { apiRequest } from "../utils/client.js";
 import { logger } from "../utils/logger.js";
+import { elicitSelection } from "../utils/elicitation.js";
 
 function getTools(): Tool[] {
   return [
@@ -191,9 +192,30 @@ async function handleCall(
   toolName: string,
   args: Record<string, unknown>
 ): Promise<CallToolResult> {
-  const action = args.action as string;
+  let action = args.action as string;
   const sender = args.sender as string | undefined;
   const note = args.note as string | undefined;
+
+  // If action is missing, elicit which action the user wants
+  if (!action) {
+    const selected = await elicitSelection(
+      "Which action would you like to perform on this list?",
+      "action",
+      [
+        { value: "list", label: "List all entries" },
+        { value: "add", label: "Add an entry" },
+        { value: "remove", label: "Remove an entry" },
+      ]
+    );
+    if (selected) {
+      action = selected;
+    } else {
+      return {
+        content: [{ type: "text", text: "Error: 'action' is required. Valid actions: add, remove, list" }],
+        isError: true,
+      };
+    }
+  }
 
   switch (toolName) {
     case "spamtitan_manage_allowlist":
