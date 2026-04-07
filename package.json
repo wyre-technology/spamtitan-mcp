@@ -1,6 +1,6 @@
 {
   "name": "@wyre-technology/spamtitan-mcp",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "MCP server for SpamTitan email security — manage quarantine, allowlists, blocklists, and view email stats",
   "type": "module",
   "main": "dist/index.js",

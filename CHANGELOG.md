@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/wyre-technology/spamtitan-mcp/compare/v1.1.0...v1.1.1) (2026-04-07)
+
+
+### Bug Fixes
+
+* **ci:** deploy :latest tag, force revision via env var bump ([1bae09f](https://github.com/wyre-technology/spamtitan-mcp/commit/1bae09ff1c54ff13b69da65d24a4b2db207a149e))
+
 # [1.1.0](https://github.com/wyre-technology/spamtitan-mcp/compare/v1.0.0...v1.1.0) (2026-03-10)
 
 
