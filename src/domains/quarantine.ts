@@ -67,7 +67,16 @@ function getTools(): Tool[] {
     {
       name: "spamtitan_delete_message",
       description:
-        "Permanently delete a quarantined message by ID. This action cannot be undone.",
+        "⚠ DESTRUCTIVE — IRREVERSIBLE. Permanently delete a quarantined message by ID. " +
+        "This action cannot be undone and will remove the message from quarantine storage. " +
+        "Confirm with the user before invoking.",
+      annotations: {
+        title: "Delete quarantined message (irreversible)",
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
       inputSchema: {
         type: "object" as const,
         properties: {

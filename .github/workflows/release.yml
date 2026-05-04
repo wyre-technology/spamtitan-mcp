@@ -23,6 +23,8 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm run typecheck
+      - name: Lint destructive tool warnings
+        run: node scripts/lint-destructive-warnings.mjs src
 
   release:
     name: Release
