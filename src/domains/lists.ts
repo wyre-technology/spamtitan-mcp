@@ -43,7 +43,17 @@ function getTools(): Tool[] {
     {
       name: "spamtitan_manage_blocklist",
       description:
-        "Add or remove sender blocklist entries in SpamTitan. Blocklisted senders are always rejected or quarantined.",
+        "⚠ HIGH-IMPACT. Add or remove sender blocklist entries in SpamTitan. " +
+        "Modifies email delivery policy and affects deliverability for users. " +
+        "Blocklisted senders are always rejected or quarantined. Reversible by removing entries. " +
+        "Confirm with the user before invoking.",
+      annotations: {
+        title: "Manage blocklist (reversible)",
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
       inputSchema: {
         type: "object" as const,
         properties: {
