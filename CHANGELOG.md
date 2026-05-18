@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Fixed
+
+* **health:** `/health` (and new `/healthz`) now return a shallow unauthenticated `200 {"status":"ok"}` and no longer depend on `getCredentials()`. In gateway mode credentials arrive per-request via headers, so the previous credential check returned `503`, failing the Azure liveness probe every 30s and crash-looping the `gwp-spamtitan` container.
+
 ## [1.1.1](https://github.com/wyre-technology/spamtitan-mcp/compare/v1.1.0...v1.1.1) (2026-04-07)
 
 
