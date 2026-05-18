@@ -99,7 +99,7 @@ async function handleCall(
     case "spamtitan_get_queue": {
       const page = (args.page as number) || 1;
       const perPage = (args.per_page as number) || 50;
-      let sender = args.sender as string | undefined;
+      const sender = args.sender as string | undefined;
       let recipient = args.recipient as string | undefined;
       const subject = args.subject as string | undefined;
       const reason = args.reason as string | undefined;
