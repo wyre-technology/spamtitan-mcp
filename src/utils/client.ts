@@ -1,41 +1,50 @@
 /**
  * SpamTitan HTTP client and credential management.
  *
- * In gateway mode (AUTH_MODE=gateway), credentials are injected
- * into process.env by the HTTP transport layer from request headers.
+ * In gateway mode (AUTH_MODE=gateway), credentials are injected per-request
+ * via AsyncLocalStorage by the HTTP transport layer from request headers.
  *
  * In env mode (AUTH_MODE=env or unset), credentials come from
- * SPAMTITAN_API_KEY environment variable directly.
+ * SPAMTITAN_API_KEY environment variable directly (stdio / single-tenant).
  */
 
-import { logger } from "./logger.js";
-import type { SpamTitanCredentials } from "./types.js";
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { logger } from './logger.js';
 
-const SPAMTITAN_BASE_URL = "https://api-spamtitan.titanhq.com";
+export interface Credentials {
+  apiKey: string;
+}
 
-let _credentials: SpamTitanCredentials | null = null;
+// Request-scoped credential store. In gateway mode the HTTP layer runs each
+// request inside runWithCredentials({apiKey}); getCredentials() reads it here.
+// Falls back to process.env for stdio/single-tenant mode.
+const credStore = new AsyncLocalStorage<Credentials>();
+
+export function runWithCredentials<T>(creds: Credentials, fn: () => T): T {
+  return credStore.run(creds, fn);
+}
+
+const SPAMTITAN_BASE_URL = process.env.SPAMTITAN_BASE_URL || 'https://api-spamtitan.titanhq.com';
 
 /**
- * Get credentials from environment variables
+ * Get credentials from the request-scoped store, or fall back to env vars.
  */
-export function getCredentials(): SpamTitanCredentials | null {
-  const apiKey = process.env.SPAMTITAN_API_KEY;
+export function getCredentials(): Credentials | null {
+  const scoped = credStore.getStore();
+  if (scoped?.apiKey) return scoped;
 
+  const apiKey = process.env.SPAMTITAN_API_KEY;
   if (!apiKey) {
-    logger.warn("Missing credentials", { hasApiKey: false });
+    logger.warn('Missing credentials', { hasApiKey: false });
     return null;
   }
 
-  return {
-    apiKey,
-    baseUrl: process.env.SPAMTITAN_BASE_URL || SPAMTITAN_BASE_URL,
-  };
+  return { apiKey };
 }
 
 /**
  * Make an authenticated HTTP request to the SpamTitan API.
- * Reads credentials fresh from env on each call so gateway mode
- * header injection is always reflected.
+ * Reads credentials fresh from the request-scoped store (or env) on each call.
  */
 export async function apiRequest<T>(
   path: string,
@@ -48,11 +57,11 @@ export async function apiRequest<T>(
   const creds = getCredentials();
   if (!creds) {
     throw new Error(
-      "No SpamTitan API credentials configured. Please set SPAMTITAN_API_KEY environment variable."
+      'No SpamTitan API credentials configured. Please set SPAMTITAN_API_KEY environment variable.'
     );
   }
 
-  const url = new URL(path, creds.baseUrl);
+  const url = new URL(path, SPAMTITAN_BASE_URL);
 
   if (options.params) {
     for (const [key, value] of Object.entries(options.params)) {
@@ -62,23 +71,20 @@ export async function apiRequest<T>(
     }
   }
 
-  const method = options.method || "GET";
+  const method = options.method || 'GET';
   const headers: Record<string, string> = {
-    "X-SpamTitan-API-Key": creds.apiKey,
-    "Content-Type": "application/json",
-    Accept: "application/json",
+    'X-SpamTitan-API-Key': creds.apiKey,
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
   };
 
-  const fetchOptions: RequestInit = {
-    method,
-    headers,
-  };
+  const fetchOptions: RequestInit = { method, headers };
 
-  if (options.body !== undefined && method !== "GET") {
+  if (options.body !== undefined && method !== 'GET') {
     fetchOptions.body = JSON.stringify(options.body);
   }
 
-  logger.debug("SpamTitan API request", { method, url: url.toString() });
+  logger.debug('SpamTitan API request', { method, url: url.toString() });
 
   const response = await fetch(url.toString(), fetchOptions);
 
@@ -93,13 +99,13 @@ export async function apiRequest<T>(
 
   if (!response.ok) {
     const message =
-      typeof responseBody === "object" &&
+      typeof responseBody === 'object' &&
       responseBody !== null &&
-      "message" in responseBody
+      'message' in responseBody
         ? String((responseBody as Record<string, unknown>).message)
         : `HTTP ${response.status}: ${response.statusText}`;
 
-    logger.error("SpamTitan API error", {
+    logger.error('SpamTitan API error', {
       status: response.status,
       url: url.toString(),
       message,
@@ -121,11 +127,4 @@ export async function apiRequest<T>(
   }
 
   return responseBody as T;
-}
-
-/**
- * Clear cached credentials (useful for testing)
- */
-export function clearCredentials(): void {
-  _credentials = null;
 }

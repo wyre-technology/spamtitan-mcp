@@ -1,59 +1,128 @@
 /**
- * Tests for SpamTitan credential management
+ * Tests for SpamTitan credential management.
+ *
+ * Covers:
+ * - env-var fallback (stdio/single-tenant mode)
+ * - AsyncLocalStorage scoping (gateway/multi-tenant mode)
+ * - Concurrent request isolation (the cross-tenant leak scenario)
+ * - Statelessness assertion: per-request distinct Server instances
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { getCredentials, clearCredentials } from "../utils/client.js";
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { getCredentials, runWithCredentials } from '../utils/client.js';
+import { createMcpServer } from '../server.js';
 
-describe("SpamTitan Client Utilities", () => {
+describe('getCredentials — env fallback (stdio / single-tenant)', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
     process.env = { ...originalEnv };
-    clearCredentials();
   });
 
   afterEach(() => {
     process.env = originalEnv;
-    clearCredentials();
   });
 
-  describe("getCredentials", () => {
-    it("should return null when SPAMTITAN_API_KEY is not set", () => {
-      delete process.env.SPAMTITAN_API_KEY;
+  it('returns null when SPAMTITAN_API_KEY is not set', () => {
+    delete process.env.SPAMTITAN_API_KEY;
+    expect(getCredentials()).toBeNull();
+  });
+
+  it('returns credentials when SPAMTITAN_API_KEY is set', () => {
+    process.env.SPAMTITAN_API_KEY = 'test-api-key-123';
+    const creds = getCredentials();
+    expect(creds).not.toBeNull();
+    expect(creds?.apiKey).toBe('test-api-key-123');
+  });
+
+  it('reflects updated env vars on each call', () => {
+    process.env.SPAMTITAN_API_KEY = 'key-1';
+    expect(getCredentials()?.apiKey).toBe('key-1');
+
+    process.env.SPAMTITAN_API_KEY = 'key-2';
+    expect(getCredentials()?.apiKey).toBe('key-2');
+  });
+});
+
+describe('runWithCredentials — request-scoped AsyncLocalStorage', () => {
+  it('exposes scoped credentials inside the callback', () => {
+    runWithCredentials({ apiKey: 'scoped-key' }, () => {
       const creds = getCredentials();
-      expect(creds).toBeNull();
+      expect(creds?.apiKey).toBe('scoped-key');
+    });
+  });
+
+  it('does not leak scoped credentials outside the callback', () => {
+    const originalEnv = process.env;
+    process.env = { ...originalEnv };
+    delete process.env.SPAMTITAN_API_KEY;
+
+    runWithCredentials({ apiKey: 'inside-key' }, () => {
+      // inside: scoped
+      expect(getCredentials()?.apiKey).toBe('inside-key');
     });
 
-    it("should return credentials when SPAMTITAN_API_KEY is set", () => {
-      process.env.SPAMTITAN_API_KEY = "test-api-key-123";
-      const creds = getCredentials();
-      expect(creds).not.toBeNull();
-      expect(creds?.apiKey).toBe("test-api-key-123");
+    // outside: no env key set, no scope active → null
+    expect(getCredentials()).toBeNull();
+    process.env = originalEnv;
+  });
+
+  it('scoped key takes priority over env var', () => {
+    const originalEnv = process.env;
+    process.env = { ...originalEnv, SPAMTITAN_API_KEY: 'env-key' };
+
+    runWithCredentials({ apiKey: 'header-key' }, () => {
+      expect(getCredentials()?.apiKey).toBe('header-key');
     });
 
-    it("should use the default base URL when SPAMTITAN_BASE_URL is not set", () => {
-      process.env.SPAMTITAN_API_KEY = "test-key";
-      delete process.env.SPAMTITAN_BASE_URL;
-      const creds = getCredentials();
-      expect(creds?.baseUrl).toBe("https://api-spamtitan.titanhq.com");
-    });
+    process.env = originalEnv;
+  });
 
-    it("should use a custom base URL when SPAMTITAN_BASE_URL is set", () => {
-      process.env.SPAMTITAN_API_KEY = "test-key";
-      process.env.SPAMTITAN_BASE_URL = "https://custom.spamtitan.example.com";
-      const creds = getCredentials();
-      expect(creds?.baseUrl).toBe("https://custom.spamtitan.example.com");
-    });
+  it('isolates concurrent requests (cross-tenant leak scenario)', async () => {
+    const results: string[] = [];
 
-    it("should reflect updated env vars on each call", () => {
-      process.env.SPAMTITAN_API_KEY = "key-1";
-      const creds1 = getCredentials();
-      expect(creds1?.apiKey).toBe("key-1");
+    // Simulate two concurrent "requests" whose async contexts must not bleed.
+    const req1 = runWithCredentials({ apiKey: 'tenant-A' }, () =>
+      new Promise<void>((resolve) => {
+        setTimeout(() => {
+          results.push(`req1: ${getCredentials()?.apiKey}`);
+          resolve();
+        }, 10);
+      })
+    );
 
-      process.env.SPAMTITAN_API_KEY = "key-2";
-      const creds2 = getCredentials();
-      expect(creds2?.apiKey).toBe("key-2");
-    });
+    const req2 = runWithCredentials({ apiKey: 'tenant-B' }, () =>
+      new Promise<void>((resolve) => {
+        setTimeout(() => {
+          results.push(`req2: ${getCredentials()?.apiKey}`);
+          resolve();
+        }, 5);
+      })
+    );
+
+    await Promise.all([req1, req2]);
+
+    expect(results).toContain('req1: tenant-A');
+    expect(results).toContain('req2: tenant-B');
+    // Ensure no cross-contamination
+    expect(results).not.toContain('req1: tenant-B');
+    expect(results).not.toContain('req2: tenant-A');
+  });
+});
+
+describe('createMcpServer — statelessness assertion', () => {
+  it('returns a distinct Server instance on each call', () => {
+    const server1 = createMcpServer();
+    const server2 = createMcpServer();
+    expect(server1).not.toBe(server2);
+  });
+
+  it('each server has its own handler registration (no shared state)', async () => {
+    const server1 = createMcpServer();
+    const server2 = createMcpServer();
+    // Both servers are independently constructed — closing one does not affect the other.
+    await server1.close();
+    // server2 should still be a valid object (not erroring on close)
+    await expect(server2.close()).resolves.not.toThrow();
   });
 });

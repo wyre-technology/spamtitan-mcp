@@ -1,5 +1,14 @@
 ## [Unreleased]
 
+### Security
+
+* **credential-isolation:** Close cross-tenant credential leak. The HTTP server previously constructed a single `Server` + `StreamableHTTPServerTransport` at module load (shared across all requests) and mutated `process.env.SPAMTITAN_API_KEY` per request to inject gateway credentials — a race condition that could serve one tenant's API key to a concurrent request from another tenant.
+  * `src/server.ts` — new `createMcpServer()` factory; all `setRequestHandler` calls live inside the factory, never at module level.
+  * `src/http.ts` — stateless per-request handler: fresh `Server` + `StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })` per request; `res.on('close', ...)` registered before `connect`; gateway credentials injected via `runWithCredentials()` (AsyncLocalStorage) instead of `process.env` mutation.
+  * `src/utils/client.ts` — `AsyncLocalStorage<Credentials>` replaces the env-mutation approach; `runWithCredentials()` exported for the HTTP layer; `getCredentials()` reads scoped store first, falls back to env for stdio; `clearCredentials()` and singleton removed.
+  * `src/index.ts` — dispatch only; no module-level `new Server()`; HTTP delegates to `src/http.ts`, stdio creates one server inside `main()`.
+  * Tests — concurrent isolation test + per-request distinct server assertion added.
+
 ### Fixed
 
 * **health:** `/health` (and new `/healthz`) now return a shallow unauthenticated `200 {"status":"ok"}` and no longer depend on `getCredentials()`. In gateway mode credentials arrive per-request via headers, so the previous credential check returned `503`, failing the Azure liveness probe every 30s and crash-looping the `gwp-spamtitan` container.
