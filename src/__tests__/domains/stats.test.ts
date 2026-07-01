@@ -6,8 +6,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../../utils/client.js", () => ({
   apiRequest: vi.fn(),
-  getCredentials: vi.fn().mockReturnValue({ apiKey: "test-key", baseUrl: "https://api-spamtitan.titanhq.com" }),
-  clearCredentials: vi.fn(),
+  getCredentials: vi.fn().mockReturnValue({ apiKey: "test-key" }),
+  runWithCredentials: vi.fn((creds: unknown, fn: () => unknown) => fn()),
 }));
 
 import { statsHandler } from "../../domains/stats.js";

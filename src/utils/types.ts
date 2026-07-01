@@ -37,10 +37,3 @@ export function isDomainName(value: string): value is DomainName {
   return ["quarantine", "lists", "stats"].includes(value);
 }
 
-/**
- * SpamTitan credentials extracted from environment or gateway headers
- */
-export interface SpamTitanCredentials {
-  apiKey: string;
-  baseUrl: string;
-}
