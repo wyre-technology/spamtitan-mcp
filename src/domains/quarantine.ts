@@ -3,6 +3,7 @@
  *
  * Provides tools for managing SpamTitan email quarantine:
  * - List quarantined messages
+ * - Get a single quarantined message (renders as an MCP Apps card)
  * - Release a quarantined message
  * - Delete a quarantined message
  */
@@ -12,6 +13,7 @@ import type { DomainHandler, CallToolResult } from "../utils/types.js";
 import { apiRequest } from "../utils/client.js";
 import { logger } from "../utils/logger.js";
 import { elicitText } from "../utils/elicitation.js";
+import { buildMessageCard, MESSAGE_CARD_META } from "../card.builder.js";
 
 function getTools(): Tool[] {
   return [
@@ -47,6 +49,22 @@ function getTools(): Tool[] {
             description: "Filter by quarantine reason (e.g. spam, virus, policy)",
           },
         },
+      },
+    },
+    {
+      name: "spamtitan_get_message",
+      description:
+        "Get a single quarantined message by ID. Returns sender, recipient, subject, quarantine reason, spam score, and status. Renders as an interactive card in MCP Apps hosts.",
+      _meta: MESSAGE_CARD_META,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          message_id: {
+            type: "string",
+            description: "The quarantined message ID to fetch",
+          },
+        },
+        required: ["message_id"],
       },
     },
     {
@@ -148,6 +166,57 @@ async function handleCall(
           {
             type: "text",
             text: JSON.stringify({ messages, page, per_page: perPage }, null, 2),
+          },
+        ],
+      };
+    }
+
+    case "spamtitan_get_message": {
+      const messageId = args.message_id as string;
+      if (!messageId) {
+        return {
+          content: [{ type: "text", text: "Error: message_id is required" }],
+          isError: true,
+        };
+      }
+
+      logger.info("API call: quarantine.getMessage", { messageId });
+
+      const result = await apiRequest<unknown>(
+        `/api/v1/quarantine/messages/${encodeURIComponent(messageId)}`
+      );
+
+      // Unwrap common envelope shapes ({ message: {...} } / { data: {...} }).
+      let message: unknown = result;
+      if (result && typeof result === "object" && !Array.isArray(result)) {
+        const wrapped =
+          (result as Record<string, unknown>).message ??
+          (result as Record<string, unknown>).data;
+        if (wrapped && typeof wrapped === "object" && !Array.isArray(wrapped)) {
+          message = wrapped;
+        }
+      }
+
+      logger.debug("API response: quarantine.getMessage", { messageId });
+
+      // MCP Apps: attach the normalized card payload the ui:// message card
+      // renders from. Best-effort — a null card (or a builder failure) just
+      // means no UI surface; the tool result is never affected.
+      let payload: unknown = message;
+      if (message && typeof message === "object" && !Array.isArray(message)) {
+        try {
+          const card = buildMessageCard(message as Record<string, unknown>);
+          if (card) payload = { ...(message as Record<string, unknown>), _card: card };
+        } catch {
+          // Card building is progressive enhancement only.
+        }
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(payload, null, 2),
           },
         ],
       };

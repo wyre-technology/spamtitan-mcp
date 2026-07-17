@@ -73,6 +73,9 @@ Email quarantine review and management
 ### Stats
 Email filtering statistics and reports
 
+## Features
+
+- **Interactive quarantined-message card (MCP Apps, SEP-1865)** — `spamtitan_get_message` renders as a read-only interactive card in MCP Apps hosts (Claude Desktop/web); plain-JSON behavior is unchanged in other hosts. The card is neutral by default, brandable via `window.__BRAND__` injection or `MCP_BRAND_*` env vars (`MCP_BRAND_NAME`, `MCP_BRAND_LOGO_URL`, `MCP_BRAND_PRIMARY_COLOR`, `MCP_BRAND_ACCENT_COLOR`, `MCP_BRAND_BG`, `MCP_BRAND_TEXT`) — no rebuild needed. Rebuild the card bundle with `npm run build:ui` after editing `ui/`.
 
 ## Development
 
