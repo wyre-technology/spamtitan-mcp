@@ -14,6 +14,7 @@ import { isDomainName } from './utils/types.js';
 import { getCredentials } from './utils/client.js';
 import { logger } from './utils/logger.js';
 import { runWithServer } from './utils/server-ref.js';
+import { registerResourceHandlers } from './resources.js';
 
 type Domain = 'quarantine' | 'lists' | 'stats';
 
@@ -59,8 +60,10 @@ const statusTool: Tool = {
 export function createMcpServer(): Server {
   const server = new Server(
     { name: 'spamtitan-mcp', version: '1.0.0' },
-    { capabilities: { tools: {} } }
+    { capabilities: { tools: {}, resources: {} } }
   );
+
+  registerResourceHandlers(server);
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const tools: Tool[] = [navigateTool, statusTool];
@@ -104,7 +107,7 @@ export function createMcpServer(): Server {
 
       const toolArgs = (args ?? {}) as Record<string, unknown>;
 
-      if (name === 'spamtitan_get_queue' || name === 'spamtitan_release_message' || name === 'spamtitan_delete_message') {
+      if (name === 'spamtitan_get_queue' || name === 'spamtitan_get_message' || name === 'spamtitan_release_message' || name === 'spamtitan_delete_message') {
         const handler = await getDomainHandler('quarantine');
         return await handler.handleCall(name, toolArgs);
       }
