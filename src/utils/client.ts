@@ -13,21 +13,29 @@ import { logger } from './logger.js';
 
 export interface Credentials {
   apiKey: string;
+  /**
+   * The tenant's SpamTitan instance. SpamTitan is self-hosted, so this is
+   * per-tenant and MUST travel with the API key rather than being read once
+   * from the process environment — otherwise every tenant's key is sent to
+   * whichever single host the container happened to boot with.
+   */
+  baseUrl: string;
 }
 
+export const DEFAULT_BASE_URL = 'https://api-spamtitan.titanhq.com';
+
 // Request-scoped credential store. In gateway mode the HTTP layer runs each
-// request inside runWithCredentials({apiKey}); getCredentials() reads it here.
-// Falls back to process.env for stdio/single-tenant mode.
+// request inside runWithCredentials({apiKey, baseUrl}); getCredentials() reads
+// it here. Falls back to process.env for stdio/single-tenant mode.
 const credStore = new AsyncLocalStorage<Credentials>();
 
 export function runWithCredentials<T>(creds: Credentials, fn: () => T): T {
   return credStore.run(creds, fn);
 }
 
-const SPAMTITAN_BASE_URL = process.env.SPAMTITAN_BASE_URL || 'https://api-spamtitan.titanhq.com';
-
 /**
  * Get credentials from the request-scoped store, or fall back to env vars.
+ * Read fresh on every call so gateway per-request injection is reflected.
  */
 export function getCredentials(): Credentials | null {
   const scoped = credStore.getStore();
@@ -39,7 +47,10 @@ export function getCredentials(): Credentials | null {
     return null;
   }
 
-  return { apiKey };
+  return {
+    apiKey,
+    baseUrl: process.env.SPAMTITAN_BASE_URL || DEFAULT_BASE_URL,
+  };
 }
 
 /**
@@ -61,7 +72,14 @@ export async function apiRequest<T>(
     );
   }
 
-  const url = new URL(path, SPAMTITAN_BASE_URL);
+  // Join base + path manually rather than relying on `new URL(path, base)`.
+  // That constructor follows WHATWG relative-URL resolution: because every
+  // call site passes a path-absolute reference ("/api/v1/..."), the base's own
+  // path would be discarded rather than preserved. Self-hosted SpamTitan
+  // instances routinely sit under a path prefix, so normalize and concatenate.
+  const normalizedBase = creds.baseUrl.replace(/\/+$/, '');
+  const normalizedPath = path.replace(/^\/+/, '');
+  const url = new URL(`${normalizedBase}/${normalizedPath}`);
 
   if (options.params) {
     for (const [key, value] of Object.entries(options.params)) {

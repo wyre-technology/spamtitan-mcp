@@ -22,7 +22,7 @@ Set the following environment variables:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `SPAMTITAN_API_KEY` | Yes | Your SpamTitan API key |
-| `SPAMTITAN_BASE_URL` | No | Your SpamTitan instance URL |
+| `SPAMTITAN_BASE_URL` | No | Your SpamTitan instance URL, including any path prefix (e.g. `https://mail.example.com/spamtitan/`). Defaults to `https://api-spamtitan.titanhq.com`. |
 | `MCP_TRANSPORT` | No | Transport mode: stdio (default) or http |
 
 ## Usage

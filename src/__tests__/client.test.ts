@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { getCredentials, runWithCredentials } from '../utils/client.js';
+import { getCredentials, runWithCredentials, DEFAULT_BASE_URL } from '../utils/client.js';
 import { createMcpServer } from '../server.js';
 
 describe('getCredentials — env fallback (stdio / single-tenant)', () => {
@@ -46,7 +46,7 @@ describe('getCredentials — env fallback (stdio / single-tenant)', () => {
 
 describe('runWithCredentials — request-scoped AsyncLocalStorage', () => {
   it('exposes scoped credentials inside the callback', () => {
-    runWithCredentials({ apiKey: 'scoped-key' }, () => {
+    runWithCredentials({ apiKey: 'scoped-key', baseUrl: DEFAULT_BASE_URL }, () => {
       const creds = getCredentials();
       expect(creds?.apiKey).toBe('scoped-key');
     });
@@ -57,7 +57,7 @@ describe('runWithCredentials — request-scoped AsyncLocalStorage', () => {
     process.env = { ...originalEnv };
     delete process.env.SPAMTITAN_API_KEY;
 
-    runWithCredentials({ apiKey: 'inside-key' }, () => {
+    runWithCredentials({ apiKey: 'inside-key', baseUrl: DEFAULT_BASE_URL }, () => {
       // inside: scoped
       expect(getCredentials()?.apiKey).toBe('inside-key');
     });
@@ -71,7 +71,7 @@ describe('runWithCredentials — request-scoped AsyncLocalStorage', () => {
     const originalEnv = process.env;
     process.env = { ...originalEnv, SPAMTITAN_API_KEY: 'env-key' };
 
-    runWithCredentials({ apiKey: 'header-key' }, () => {
+    runWithCredentials({ apiKey: 'header-key', baseUrl: DEFAULT_BASE_URL }, () => {
       expect(getCredentials()?.apiKey).toBe('header-key');
     });
 
@@ -82,7 +82,7 @@ describe('runWithCredentials — request-scoped AsyncLocalStorage', () => {
     const results: string[] = [];
 
     // Simulate two concurrent "requests" whose async contexts must not bleed.
-    const req1 = runWithCredentials({ apiKey: 'tenant-A' }, () =>
+    const req1 = runWithCredentials({ apiKey: 'tenant-A', baseUrl: 'https://tenant-a.example.com/st/' }, () =>
       new Promise<void>((resolve) => {
         setTimeout(() => {
           results.push(`req1: ${getCredentials()?.apiKey}`);
@@ -91,7 +91,7 @@ describe('runWithCredentials — request-scoped AsyncLocalStorage', () => {
       })
     );
 
-    const req2 = runWithCredentials({ apiKey: 'tenant-B' }, () =>
+    const req2 = runWithCredentials({ apiKey: 'tenant-B', baseUrl: 'https://tenant-b.example.com/st/' }, () =>
       new Promise<void>((resolve) => {
         setTimeout(() => {
           results.push(`req2: ${getCredentials()?.apiKey}`);
