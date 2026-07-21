@@ -15,7 +15,7 @@
 import { createServer as createHttpServer } from 'node:http';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createScopedMcpServer } from './server.js';
-import { getCredentials, runWithCredentials } from './utils/client.js';
+import { getCredentials, runWithCredentials, DEFAULT_BASE_URL } from './utils/client.js';
 import { logger } from './utils/logger.js';
 
 export function startHttpServer(): void {
@@ -61,6 +61,13 @@ export function startHttpServer(): void {
         return;
       }
 
+      // SpamTitan is self-hosted, so the instance URL is per-tenant and must
+      // travel with the key. Optional for back-compat: absent, we fall back to
+      // SPAMTITAN_BASE_URL / the TitanHQ default.
+      const baseUrl = (req.headers['x-spamtitan-base-url'] as string | undefined)
+        || process.env.SPAMTITAN_BASE_URL
+        || DEFAULT_BASE_URL;
+
       const handle = () => createScopedMcpServer(async (server) => {
         // SECURITY: sessionIdGenerator: undefined → stateless, one response per request.
         const transport = new StreamableHTTPServerTransport({
@@ -72,7 +79,7 @@ export function startHttpServer(): void {
         await transport.handleRequest(req, res);
       });
 
-      await runWithCredentials({ apiKey }, handle);
+      await runWithCredentials({ apiKey, baseUrl }, handle);
       return;
     }
 

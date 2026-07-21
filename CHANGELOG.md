@@ -9,6 +9,11 @@
 
 ### Security
 
+* **credential-isolation:** Route each tenant to its own SpamTitan instance. The previous fix below moved the *API key* into request-scoped `AsyncLocalStorage`, but the base URL was left as a module-level `const` read from `process.env.SPAMTITAN_BASE_URL` once at import time, and `Credentials` carried only `apiKey`. SpamTitan is self-hosted, so the instance URL is per-tenant: in gateway mode every tenant's API key was therefore sent to whichever single host the container happened to boot with — one tenant's credential transmitted to another tenant's (or TitanHQ's) server. `baseUrl` is now a required field on `Credentials` and travels with the key.
+  * `src/utils/client.ts` — `Credentials.baseUrl` added; module-level `SPAMTITAN_BASE_URL` const removed; `getCredentials()` resolves scoped store → `SPAMTITAN_BASE_URL` → exported `DEFAULT_BASE_URL`, read fresh per call.
+  * `src/http.ts` — gateway mode reads the optional `X-SpamTitan-Base-Url` header (matching the fleet's `x-<vendor>-<discriminator>` convention, cf. `x-liongard-instance`) and passes it to `runWithCredentials()`. Absent, it falls back to env then the default, so existing single-tenant deployments are unaffected.
+  * Tests — concurrent two-tenant routing assertion in `src/__tests__/client-url.test.ts`.
+
 * **credential-isolation:** Close cross-tenant credential leak. The HTTP server previously constructed a single `Server` + `StreamableHTTPServerTransport` at module load (shared across all requests) and mutated `process.env.SPAMTITAN_API_KEY` per request to inject gateway credentials — a race condition that could serve one tenant's API key to a concurrent request from another tenant.
   * `src/server.ts` — new `createMcpServer()` factory; all `setRequestHandler` calls live inside the factory, never at module level.
   * `src/http.ts` — stateless per-request handler: fresh `Server` + `StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })` per request; `res.on('close', ...)` registered before `connect`; gateway credentials injected via `runWithCredentials()` (AsyncLocalStorage) instead of `process.env` mutation.
@@ -17,6 +22,8 @@
   * Tests — concurrent isolation test + per-request distinct server assertion added.
 
 ### Fixed
+
+* **client:** Self-hosted instance URLs no longer lose their path prefix. `apiRequest()` built request URLs with `new URL(path, base)`, which performs RFC 3986 relative resolution rather than concatenation: because every call site passes a path-absolute reference (e.g. `/api/v1/stats`), the base URL's own path was discarded entirely. `SPAMTITAN_BASE_URL` is documented as "your SpamTitan instance URL" and SpamTitan is self-hosted, so any appliance served under a path prefix (e.g. `https://mail.example.com/spamtitan/`) had every request land on `/api/v1/...` instead of `/spamtitan/api/v1/...`. The bare-origin TitanHQ default is unaffected, which is why this was invisible by default. Base and path are now slash-normalized and joined explicitly. This also removes a sharper edge of the same bug: a path beginning with `//` is a *protocol-relative* reference, so `new URL('//api/v1/x', base)` resolved to the host `api` — sending the request to an entirely different server. Regression tests in `src/__tests__/client-url.test.ts` pin both host shapes.
 
 * **health:** `/health` (and new `/healthz`) now return a shallow unauthenticated `200 {"status":"ok"}` and no longer depend on `getCredentials()`. In gateway mode credentials arrive per-request via headers, so the previous credential check returned `503`, failing the Azure liveness probe every 30s and crash-looping the `gwp-spamtitan` container.
 
